@@ -2,13 +2,16 @@ const express = require("express");
 const app = express();
 // port 
 require('dotenv').config();
-const PORT = process.env.PORT || 4000 ;
+const PORT = process.env.PORT || 4000;
 // middleware
 app.use(express.json());
 
 // USE multer or express-fileupload package 
 const fileupload = require('express-fileupload');
-app.use(fileupload());
+app.use(fileupload({
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
 
 // Cloud connect 
 
