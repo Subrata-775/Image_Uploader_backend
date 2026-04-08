@@ -1,6 +1,6 @@
-const file = require("../models/File");
+
 const cloudinary = require("cloudinary").v2;
-const File=require('../models/File')
+const File = require('../models/File')
 
 // localFile Handler
 
@@ -43,13 +43,14 @@ exports.localFileUpload = async (req, res) => {
 
 // type is supported  or not
 async function isFileTypeSupported(supportFile, UploadImageType) {
-    return await supportFile.includes(UploadImageType);
+    return supportFile.includes(UploadImageType);
 }
 
 
 // Upload in cloudinary 
 async function UploadCloudinaryFile(ImageUploadedFile, Folder) {
     const options = { folder: Folder };
+    options.resource_type = "auto";
     console.log("Temp file path", ImageUploadedFile.tempFilePath);
     return await cloudinary.uploader.upload(ImageUploadedFile.tempFilePath, options);
 
@@ -116,13 +117,78 @@ exports.imageFileUpload = async (req, res) => {
 
 
 
+// *******************************************************************************
+//                             video file Upload
+// ********************************************************************************
+// type is supported  or not
+async function isVideoFileTypeSupported(supportedType, videoFileType) {
+    return supportedType.includes(videoFileType);
+}
 
+async function uploadCloudinaryVideoFile(videoFile, folder) {
+    const options = { folder: folder };
+    options.resource_type = "auto";
+    console.log("Temp file path:", videoFile.tempFilePath);
 
+    return await cloudinary.uploader.upload(videoFile.tempFilePath, options);
+}
 
+exports.videoFileUpload = async (req, res) => {
+    try {
 
+        const { name, email, tags } = req.body;
 
+        if (!req.files || !req.files.videoFile) {
+            return res.status(400).json({
+                success: false,
+                message: "No video uploaded"
+            })
+        }
 
+        const videoFile = req.files.videoFile;
 
+        const supportedType = ['mov', 'mp4'];
 
+        const videoFileType = videoFile.name.split('.').pop().toLowerCase();
 
+        const isSupported = isVideoFileTypeSupported(supportedType, videoFileType);
 
+        if (!isSupported) {
+            return res.status(400).json({
+                success: false,
+                message: "File format not supported"
+            })
+        }
+
+        if (videoFile.size > 500 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                message: "File too large"
+            })
+        }
+
+        const response = await uploadCloudinaryVideoFile(videoFile, "DevSubrata");
+
+        const fileData = await File.create({
+            name,
+            tags,
+            email,
+            videoUrl: response.secure_url
+        });
+        console.log(fileData)
+
+        res.status(200).json({
+            success: true,
+            videoUrl: response.secure_url,
+            message: "Video uploaded successfully"
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        })
+    }
+}
