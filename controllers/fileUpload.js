@@ -1,137 +1,131 @@
-
 const cloudinary = require("cloudinary").v2;
-const File = require('../models/File')
+const File = require("../models/File");
 
-// localFile Handler
+
+// **********************************************
+//            LOCAL FILE UPLOAD
+// **********************************************
 
 exports.localFileUpload = async (req, res) => {
     try {
 
-        // featch file 
-        // Getting the uploaded file from request.
-        // This works when using express-fileupload middleware.
         const uploadedFile = req.files.file;
-        console.log(uploadedFile)
-        // store this file into  a server location
-        const path = __dirname + "/files/" + Date.now() + `.${uploadedFile.name.split(".")[1]}`;
-        console.log(path)
-        // move file
+
+        const path =
+            __dirname +
+            "/files/" +
+            Date.now() +
+            `.${uploadedFile.name.split(".").pop()}`;
+
         uploadedFile.mv(path, (err) => {
-            console.log(err);
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    success: false,
+                    message: "File upload failed",
+                });
+            }
         });
 
         res.status(200).json({
             success: true,
-            message: "Local file uploaded successfull"
-        })
-
-    } catch (e) {
-        res.status(400).json({
-            success: false,
-            message: "Local file uploaded feaild"
-        })
-    }
-}
-
-
-
-
-
-// *******************************************************************************
-//                              Image file Upload
-// ********************************************************************************
-
-// type is supported  or not
-async function isFileTypeSupported(supportFile, UploadImageType) {
-    return supportFile.includes(UploadImageType);
-}
-
-
-// Upload in cloudinary 
-async function UploadCloudinaryFile(ImageUploadedFile, Folder) {
-    const options = { folder: Folder };
-    options.resource_type = "auto";
-    console.log("Temp file path", ImageUploadedFile.tempFilePath);
-    return await cloudinary.uploader.upload(ImageUploadedFile.tempFilePath, options);
-
-}
-exports.imageFileUpload = async (req, res) => {
-    try {
-
-        // access Data from body 
-        const { name, email, tags } = req.body;
-        console.log(name, email, tags);
-        // access image file 
-        const ImageUploadedFile = req.files.imageFile;
-        console.log(ImageUploadedFile)
-
-        // validation check
-        const supportFile = ['jpg', 'jpeg', 'png'];
-        const UploadImageType = ImageUploadedFile.name.split('.')[1].toLowerCase();
-        console.log("file type", UploadImageType);
-        const isSupported = isFileTypeSupported(supportFile, UploadImageType);
-
-        // condition
-        if (!isSupported) {
-            return res.status(400).json({
-                success: false,
-                message: "File Format is not supported."
-            })
-        }
-
-        // if support  then upload in cloudinary 
-        console.log("Upoading in devSubrata")
-        const response = await UploadCloudinaryFile(ImageUploadedFile, "DevSubrata");
-        console.log(response)
-        console.log(response.secure_url)
-
-        // DB entry
-
-
-        const fileData = await File.create({
-            name,
-            tags,
-            email,
-            imageUrl: response.secure_url
+            message: "Local file uploaded successfully",
         });
 
-        console.log(fileData)
-
-
-        res.status(200).json({
-            success: true,
-            imageUrl: response.secure_url,
-            message: "Image  is successfully uploaded"
-        })
-
-    } catch (e) {
-        console.error(e);
+    } catch (error) {
+        console.error(error);
         res.status(400).json({
             success: false,
-            message: "something went wrong"
-        })
+            message: "Something went wrong",
+        });
     }
 };
 
 
 
+// **********************************************
+//            FILE TYPE CHECK
+// **********************************************
 
-
-// *******************************************************************************
-//                             video file Upload
-// ********************************************************************************
-// type is supported  or not
-async function isVideoFileTypeSupported(supportedType, videoFileType) {
-    return supportedType.includes(videoFileType);
+function isFileTypeSupported(supportedTypes, fileType) {
+    return supportedTypes.includes(fileType);
 }
 
-async function uploadCloudinaryVideoFile(videoFile, folder) {
-    const options = { folder: folder };
+
+
+// **********************************************
+//        CLOUDINARY FILE UPLOAD FUNCTION
+// **********************************************
+
+async function uploadToCloudinary(file, folder, quality) {
+
+    const options = { folder };
+
     options.resource_type = "auto";
-    console.log("Temp file path:", videoFile.tempFilePath);
 
-    return await cloudinary.uploader.upload(videoFile.tempFilePath, options);
+    if (quality) {
+        options.quality = quality;
+    }
+
+    console.log("Temp file path:", file.tempFilePath);
+
+    return await cloudinary.uploader.upload(file.tempFilePath, options);
 }
+
+
+
+// **********************************************
+//              IMAGE FILE UPLOAD
+// **********************************************
+
+exports.imageFileUpload = async (req, res) => {
+    try {
+
+        const { name, email, tags } = req.body;
+
+        const imageFile = req.files.imageFile;
+
+        const supportedTypes = ["jpg", "jpeg", "png"];
+
+        const fileType = imageFile.name.split(".").pop().toLowerCase();
+
+        if (!isFileTypeSupported(supportedTypes, fileType)) {
+            return res.status(400).json({
+                success: false,
+                message: "File format not supported",
+            });
+        }
+
+        const response = await uploadToCloudinary(imageFile, "DevSubrata");
+
+        const fileData = await File.create({
+            name,
+            tags,
+            email,
+            imageUrl: response.secure_url,
+        });
+
+        res.status(200).json({
+            success: true,
+            imageUrl: response.secure_url,
+            message: "Image uploaded successfully",
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+        });
+    }
+};
+
+
+
+// **********************************************
+//              VIDEO FILE UPLOAD
+// **********************************************
 
 exports.videoFileUpload = async (req, res) => {
     try {
@@ -141,46 +135,44 @@ exports.videoFileUpload = async (req, res) => {
         if (!req.files || !req.files.videoFile) {
             return res.status(400).json({
                 success: false,
-                message: "No video uploaded"
-            })
+                message: "No video uploaded",
+            });
         }
 
         const videoFile = req.files.videoFile;
 
-        const supportedType = ['mov', 'mp4'];
+        const supportedTypes = ["mp4", "mov"];
 
-        const videoFileType = videoFile.name.split('.').pop().toLowerCase();
+        const fileType = videoFile.name.split(".").pop().toLowerCase();
 
-        const isSupported = isVideoFileTypeSupported(supportedType, videoFileType);
-
-        if (!isSupported) {
+        if (!isFileTypeSupported(supportedTypes, fileType)) {
             return res.status(400).json({
                 success: false,
-                message: "File format not supported"
-            })
+                message: "File format not supported",
+            });
         }
 
         if (videoFile.size > 500 * 1024 * 1024) {
             return res.status(400).json({
                 success: false,
-                message: "File too large"
-            })
+                message: "File too large",
+            });
         }
 
-        const response = await uploadCloudinaryVideoFile(videoFile, "DevSubrata");
+        const response = await uploadToCloudinary(videoFile, "DevSubrata");
 
         const fileData = await File.create({
             name,
             tags,
             email,
-            videoUrl: response.secure_url
+            videoUrl: response.secure_url,
         });
-        console.log(fileData)
+        conbsole.log(fileData)
 
         res.status(200).json({
             success: true,
             videoUrl: response.secure_url,
-            message: "Video uploaded successfully"
+            message: "Video uploaded successfully",
         });
 
     } catch (error) {
@@ -188,7 +180,56 @@ exports.videoFileUpload = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Something went wrong"
-        })
+            message: "Something went wrong",
+        });
     }
-}
+};
+
+
+
+// **********************************************
+//        IMAGE REDUCED QUALITY UPLOAD
+// **********************************************
+
+exports.imageReduceUpload = async (req, res) => {
+    try {
+
+        const { name, email, tags } = req.body;
+
+        const imageFile = req.files.imageFile;
+
+        const supportedTypes = ["jpg", "jpeg", "png"];
+
+        const fileType = imageFile.name.split(".").pop().toLowerCase();
+
+        if (!isFileTypeSupported(supportedTypes, fileType)) {
+            return res.status(400).json({
+                success: false,
+                message: "File format not supported",
+            });
+        }
+
+        const response = await uploadToCloudinary(imageFile, "DevSubrata", 5);
+
+        const fileData = await File.create({
+            name,
+            tags,
+            email,
+            imageUrl: response.secure_url,
+        });
+
+        res.status(200).json({
+            success: true,
+            imageUrl: response.secure_url,
+            message: "Compressed image uploaded successfully",
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+        });
+    }
+};
